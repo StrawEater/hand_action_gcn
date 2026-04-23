@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import pickle
 import torch
@@ -11,18 +12,19 @@ from feeders import tools
 class Feeder(Dataset):
     def __init__(self, data_path, label_path,
                  random_choose=False, random_shift=False, random_move=False,
-                 window_size=-1, normalization=False, debug=False, use_mmap=True):
+                 window_size=-1, normalization=False, debug=False, use_mmap=True,
+                 data_fraction=1.0):
         """
-        
-        :param data_path: 
-        :param label_path: 
+        :param data_path:
+        :param label_path:
         :param random_choose: If true, randomly choose a portion of the input sequence
         :param random_shift: If true, randomly pad zeros at the begining or end of sequence
-        :param random_move: 
+        :param random_move:
         :param window_size: The length of the output sequence
         :param normalization: If true, normalize input sequence
         :param debug: If true, only use the first 100 samples
         :param use_mmap: If true, use mmap mode to load data, which can save the running memory
+        :param data_fraction: Fraction of training data to use (stratified by class, seed=42)
         """
 
         self.debug = debug
@@ -34,30 +36,46 @@ class Feeder(Dataset):
         self.window_size = window_size
         self.normalization = normalization
         self.use_mmap = use_mmap
+        self.data_fraction = data_fraction
         self.load_data()
         if normalization:
             self.get_mean_map()
 
     def load_data(self):
-        # data: N C V T M
-
         try:
             with open(self.label_path) as f:
                 self.sample_name, self.label = pickle.load(f)
         except:
-            # for pickle file from python2
             with open(self.label_path, 'rb') as f:
                 self.sample_name, self.label = pickle.load(f, encoding='latin1')
 
-        # load data
         if self.use_mmap:
             self.data = np.load(self.data_path, mmap_mode='r')
         else:
             self.data = np.load(self.data_path)
+
         if self.debug:
             self.label = self.label[0:100]
             self.data = self.data[0:100]
             self.sample_name = self.sample_name[0:100]
+
+        if self.data_fraction < 1.0:
+            self._stratified_subsample()
+
+    def _stratified_subsample(self):
+        """Subsample data keeping data_fraction of each class, stratified."""
+        rng = np.random.RandomState(42)
+        labels = np.array(self.label)
+        keep_indices = []
+        for cls in np.unique(labels):
+            cls_indices = np.where(labels == cls)[0]
+            rng.shuffle(cls_indices)
+            n_keep = max(1, math.ceil(len(cls_indices) * self.data_fraction))
+            keep_indices.extend(cls_indices[:n_keep].tolist())
+        keep_indices = sorted(keep_indices)
+        self.data = self.data[keep_indices]
+        self.label = labels[keep_indices]
+        self.sample_name = [self.sample_name[i] for i in keep_indices]
 
     def get_mean_map(self):
         data = self.data
@@ -105,12 +123,12 @@ def import_class(name):
 def test(data_path, label_path, vid=None, graph=None, is_3d=False):
     '''
     vis the samples using matplotlib
-    :param data_path: 
-    :param label_path: 
+    :param data_path:
+    :param label_path:
     :param vid: the id of sample
-    :param graph: 
+    :param graph:
     :param is_3d: when vis NTU, set it True
-    :return: 
+    :return:
     '''
     import matplotlib.pyplot as plt
     loader = torch.utils.data.DataLoader(
@@ -126,7 +144,6 @@ def test(data_path, label_path, vid=None, graph=None, is_3d=False):
         data, label, index = loader.dataset[index]
         data = data.reshape((1,) + data.shape)
 
-        # for batch_idx, (data, label) in enumerate(loader):
         N, C, T, V, M = data.shape
 
         plt.ion()
@@ -180,7 +197,6 @@ def test(data_path, label_path, vid=None, graph=None, is_3d=False):
                             if is_3d:
                                 pose[m][i].set_3d_properties(data[0, 2, t, [v1, v2], m])
                 fig.canvas.draw()
-                # plt.savefig('/home/lshi/Desktop/skeleton_sequence/' + str(t) + '.jpg')
                 plt.pause(0.01)
 
 
@@ -192,4 +208,3 @@ if __name__ == '__main__':
     label_path = "../data/ntu/xview/val_label.pkl"
     graph = 'graph.ntu_rgb_d.Graph'
     test(data_path, label_path, vid='S004C001P003R001A032', graph=graph, is_3d=True)
-

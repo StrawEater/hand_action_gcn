@@ -182,7 +182,8 @@ class ReconHead(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_class=60, num_point=25, num_person=2, graph=None, graph_args=dict(), in_channels=3):
+    def __init__(self, num_class=60, num_point=25, num_person=2, graph=None, graph_args=dict(),
+                 in_channels=3, layers_per_stage=None):
         super(Model, self).__init__()
 
         if graph is None:
@@ -194,16 +195,30 @@ class Model(nn.Module):
         A = self.graph.A
         self.data_bn = nn.BatchNorm1d(num_person * in_channels * num_point)
 
-        self.l1 = TCN_GCN_unit(3, 64, A, residual=False)
-        self.l2 = TCN_GCN_unit(64, 64, A)
-        self.l3 = TCN_GCN_unit(64, 64, A)
-        self.l4 = TCN_GCN_unit(64, 64, A)
-        self.l5 = TCN_GCN_unit(64, 128, A, stride=2)
-        self.l6 = TCN_GCN_unit(128, 128, A)
-        self.l7 = TCN_GCN_unit(128, 128, A)
-        self.l8 = TCN_GCN_unit(128, 256, A, stride=2)
-        self.l9 = TCN_GCN_unit(256, 256, A)
-        self.l10 = TCN_GCN_unit(256, 256, A)
+        # Default: original 10-layer config [4, 3, 3]
+        if layers_per_stage is None:
+            layers_per_stage = [4, 3, 3]
+
+        if len(layers_per_stage) != 3:
+            raise ValueError(f"layers_per_stage must have 3 elements, got {layers_per_stage}")
+        if any(n < 1 for n in layers_per_stage):
+            raise ValueError(f"Each stage must have at least 1 layer, got {layers_per_stage}")
+
+        layers = []
+        # Stage 1: in_channels → 64
+        layers.append(TCN_GCN_unit(in_channels, 64, A, residual=False))
+        for _ in range(layers_per_stage[0] - 1):
+            layers.append(TCN_GCN_unit(64, 64, A))
+        # Stage 2: 64 → 128 (stride=2 for first layer)
+        layers.append(TCN_GCN_unit(64, 128, A, stride=2))
+        for _ in range(layers_per_stage[1] - 1):
+            layers.append(TCN_GCN_unit(128, 128, A))
+        # Stage 3: 128 → 256 (stride=2 for first layer)
+        layers.append(TCN_GCN_unit(128, 256, A, stride=2))
+        for _ in range(layers_per_stage[2] - 1):
+            layers.append(TCN_GCN_unit(256, 256, A))
+
+        self.layers = nn.ModuleList(layers)
 
         self.fc = nn.Linear(256, num_class)
         nn.init.normal_(self.fc.weight, 0, math.sqrt(2. / num_class))
@@ -219,18 +234,10 @@ class Model(nn.Module):
         x = self.data_bn(x)
         x = x.view(N, M, V, C, T).permute(0, 1, 3, 4, 2).contiguous().view(N * M, C, T, V)
 
-        x = self.l1(x)
-        x = self.l2(x)
-        x = self.l3(x)
-        x = self.l4(x)
-        x = self.l5(x)
-        x = self.l6(x)
-        x = self.l7(x)
-        x = self.l8(x)
-        x = self.l9(x)
-        x = self.l10(x)
+        for layer in self.layers:
+            x = layer(x)
 
-        # Reconstruction branch: upsample features back to (N, C_in, T, V, M)
+        # Reconstruction branch
         recon = None
         if return_recon:
             r = self.recon_head(x, T, V)                           # (N*M, C_in, T, V)

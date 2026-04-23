@@ -1,0 +1,22 @@
+# Quick first-pass sweep for this server (18 runs).
+# Fixes data_fraction=full and label_smoothing=0.1,
+# varies model depth × mask_ratio × random_move.
+# Run with: python sweep.py config/sweeps/sweep_local_quick.yaml
+
+sweep:
+  base: config/sweeps/base_shift_gcn.yaml
+  grid:
+    model_args.layers_per_stage:
+      depth6:  [2, 2, 2]
+      depth7:  [3, 2, 2]
+      depth10: [4, 3, 3]
+    mask_ratio:
+      unmasked: 0.0
+      masked:   0.25
+    train_feeder_args.random_move:
+      no_transform: false
+      with_transform: true
+    train_feeder_args.data_fraction:
+      full: 1.0
+    label_smoothing:
+      ls01: 0.1

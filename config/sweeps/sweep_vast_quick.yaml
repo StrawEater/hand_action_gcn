@@ -1,0 +1,22 @@
+# Quick first-pass sweep for Vast.ia (18 runs).
+# Fixes data_fraction=full and label_smoothing=0.1,
+# varies model size × mask_ratio × random_move.
+# Run with: python sweep.py config/sweeps/sweep_vast_quick.yaml
+
+sweep:
+  base: config/sweeps/base_skeleton_mamba.yaml
+  grid:
+    model_args.model_size:
+      tiny:   tiny
+      medium: medium
+      large:  large
+    mask_ratio:
+      unmasked: 0.0
+      masked:   0.25
+    train_feeder_args.random_move:
+      no_transform: false
+      with_transform: true
+    train_feeder_args.data_fraction:
+      full: 1.0
+    label_smoothing:
+      ls01: 0.1

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import argparse
+import json
 import os
 import time
 import numpy as np
@@ -221,28 +222,40 @@ def load_yaml(parser, yaml_config):
     return parser.parse_args()
 
 
+def make_arg_from_dict(config_dict):
+    """Build an arg namespace from a config dict (used by sweep.py)."""
+    parser = get_parser()
+    arg = parser.parse_args([])
+    for k, v in config_dict.items():
+        setattr(arg, k, v)
+    return arg
+
+
 class Processor():
-    """ 
+    """
         Processor for Skeleton-based Action Recgnition
     """
 
-    def __init__(self, arg):
+    def __init__(self, arg, non_interactive=False):
 
         arg.model_saved_name = "./save_models/"+arg.Experiment_name
         arg.work_dir = "./work_dir/"+arg.Experiment_name
         self.arg = arg
         self.save_arg()
         if arg.phase == 'train':
-            if not arg.train_feeder_args['debug']:
+            if not arg.train_feeder_args.get('debug', False):
                 if os.path.isdir(arg.model_saved_name):
-                    print('log_dir: ', arg.model_saved_name, 'already exist')
-                    answer = input('delete it? y/n:')
-                    if answer == 'y':
-                        shutil.rmtree(arg.model_saved_name)
-                        print('Dir removed: ', arg.model_saved_name)
-                        input('Refresh the website of tensorboard by pressing any keys')
+                    if non_interactive:
+                        print('log_dir: ', arg.model_saved_name, 'already exist — skipping prompt (non-interactive mode)')
                     else:
-                        print('Dir not removed: ', arg.model_saved_name)
+                        print('log_dir: ', arg.model_saved_name, 'already exist')
+                        answer = input('delete it? y/n:')
+                        if answer == 'y':
+                            shutil.rmtree(arg.model_saved_name)
+                            print('Dir removed: ', arg.model_saved_name)
+                            input('Refresh the website of tensorboard by pressing any keys')
+                        else:
+                            print('Dir not removed: ', arg.model_saved_name)
 
         self.global_step = 0
         self.load_model()
@@ -481,17 +494,23 @@ class Processor():
                 if mask_ratio > 0 and epoch <= self.arg.warm_up_epoch:
                     original_data = data.clone()
                     data_masked, joint_mask = apply_joint_zero_mask(data, mask_ratio, mask_depth)
-                    
+
                     output = self.model(data, return_recon=False)
                     _, recon = self.model(data_masked, return_recon=True)
-                    
+
+                    if recon is None:
+                        raise RuntimeError(
+                            f"mask_ratio > 0 but {type(self.model).__name__} returned "
+                            "recon=None. Ensure the model implements reconstruction output."
+                        )
+
                     cls_loss = self.loss(output, label)
 
                     diff_abs = torch.abs(recon - original_data)
                     n_masked = joint_mask.sum()
 
                     recon_loss = (diff_abs * joint_mask).sum() / n_masked
-                    
+
                     loss = cls_loss + recon_weight * recon_loss
 
                 else:
@@ -551,8 +570,13 @@ class Processor():
 
         if accuracy > self.best_acc:
             self.best_acc = accuracy
-            # self.save_model(epoch)
             self.print_log('New best accuracy: {:.2f}%'.format(accuracy * 100))
+
+        # Structured per-epoch metrics for sweep analysis
+        metrics_path = os.path.join(self.arg.work_dir, 'metrics.jsonl')
+        with open(metrics_path, 'a') as f:
+            json.dump({'epoch': epoch + 1, 'top1': float(accuracy * 100)}, f)
+            f.write('\n')
 
         self.print_log('Eval Accuracy: {:.2f}% | Model: {}'.format(
             accuracy * 100, self.arg.model_saved_name))

@@ -1,0 +1,19 @@
+# Base config for Shift-GCN sweep experiments.
+# Inherits all settings from the main training config.
+base: config/train_joint.yaml
+
+Experiment_name: sweep_shift_gcn
+num_epoch: 60
+eval_interval: 5
+weights: null
+
+# layers_per_stage default — overridden by sweep grid
+model_args:
+  graph: graph.hand_oakink.Graph
+  graph_args:
+    labeling_mode: spatial
+  in_channels: 3
+  num_class: 32
+  num_person: 1
+  num_point: 42
+  layers_per_stage: [4, 3, 3]

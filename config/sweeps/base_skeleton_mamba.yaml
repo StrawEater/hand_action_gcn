@@ -1,0 +1,16 @@
+# Base config for SkeletonMamba sweep experiments (run on Vast.ia).
+base: config/train_joint.yaml
+
+Experiment_name: sweep_skeleton_mamba
+num_epoch: 60
+eval_interval: 5
+weights: null
+
+model: model.skeleton_mamba.SkeletonMambaModel
+model_args:
+  num_class: 32
+  num_point: 42
+  num_person: 1
+  in_channels: 3
+  model_size: tiny
+  num_frames: 8   # must match train_feeder_args.window_size
