@@ -16,7 +16,7 @@ from torch.autograd import Variable
 from tqdm import tqdm
 # from tensorboardX import SummaryWriter
 import shutil
-from torch.optim.lr_scheduler import ReduceLROnPlateau, MultiStepLR
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import random
 import inspect
 import torch.backends.cudnn as cudnn
@@ -31,22 +31,42 @@ def init_seed(_):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-
-def apply_joint_mask(x, mask_ratio):
-    """Randomly zero out entire joints (across all frames) for MAE-style reconstruction.
+def create_joint_mask(x, mask_ratio, depth):
+    """Randomly creates a mask of non overlapping segments over verterces and frames equal in both hands.
 
     Returns:
-        x_masked: same shape as x with masked joints zeroed out
-        joint_mask: (N, 1, 1, V, 1) float tensor, 1=visible 0=masked
+        joint_mask: (N, 1, T, V, 1) float tensor, 0=not choosen 1=choosen
     """
     N, C, T, V, M = x.shape
-    n_mask = max(1, int(mask_ratio * V))
-    joint_mask = torch.ones(N, 1, 1, V, 1, device=x.device)
-    for i in range(N):
-        idx = torch.randperm(V, device=x.device)[:n_mask]
-        joint_mask[i, 0, 0, idx, 0] = 0.0
-    return x * joint_mask, joint_mask
 
+    one_hand = V//2
+    total_frames_segments = T // depth
+    total_keypoints_segments = total_frames_segments * one_hand
+
+    n_mask = max(1, int(mask_ratio * total_keypoints_segments))
+    joint_mask = torch.zeros(N, 1, T, one_hand, 1, device=x.device)
+    
+    for i in range(N):
+        idx = torch.randperm(total_keypoints_segments, device=x.device)[:n_mask]
+
+        time_frame_segment_idx = idx // one_hand
+        joint_segment_idx = idx % one_hand
+
+        mask_time_frame_segment_start = time_frame_segment_idx * depth
+        mask_time_frame_segment_end = mask_time_frame_segment_start + depth
+
+        joint_mask[i, 0, mask_time_frame_segment_start:mask_time_frame_segment_end , joint_segment_idx, 0] = 1
+    
+    both_hand_mask = joint_mask.repeat_interleave(2, dim=3)  # dim=3 is V
+
+    return both_hand_mask
+
+def apply_joint_zero_mask(x, mask_ratio, depth):
+    
+    both_hand_mask = create_joint_mask(x, mask_ratio, depth)
+    hide_mask = 1 - both_hand_mask 
+
+    return x * hide_mask, both_hand_mask
 
 def get_parser():
     # parameter priority: command line > config > default
@@ -75,17 +95,10 @@ def get_parser():
 
     # visulize and debug
     parser.add_argument(
-        '--seed', type=int, default=1, help='random seed for pytorch')
-    parser.add_argument(
         '--log-interval',
         type=int,
         default=100,
         help='the interval for printing messages (#iteration)')
-    parser.add_argument(
-        '--save-interval',
-        type=int,
-        default=2,
-        help='the interval for storing models (#iteration)')
     parser.add_argument(
         '--eval-interval',
         type=int,
@@ -131,31 +144,15 @@ def get_parser():
         '--weights',
         default=None,
         help='the weights for network initialization')
-    parser.add_argument(
-        '--ignore-weights',
-        type=str,
-        default=[],
-        nargs='+',
-        help='the name of weights which will be ignored in the initialization')
-
     # optim
     parser.add_argument(
         '--base-lr', type=float, default=0.01, help='initial learning rate')
-    parser.add_argument(
-        '--step',
-        type=int,
-        default=[20, 40, 60],
-        nargs='+',
-        help='the epoch where optimizer reduce the learning rate')
     parser.add_argument(
         '--device',
         type=int,
         default=0,
         nargs='+',
         help='the indexes of GPUs for training or testing')
-    parser.add_argument('--optimizer', default='SGD', help='type of optimizer')
-    parser.add_argument(
-        '--nesterov', type=str2bool, default=False, help='use nesterov or not')
     parser.add_argument(
         '--batch-size', type=int, default=256, help='training batch size')
     parser.add_argument(
@@ -175,18 +172,51 @@ def get_parser():
         type=float,
         default=0.0005,
         help='weight decay for optimizer')
-    parser.add_argument('--only_train_part', default=True)
-    parser.add_argument('--only_train_epoch', default=0)
     parser.add_argument('--warm_up_epoch', default=0)
     parser.add_argument('--label_smoothing', type=float, default=0.1,
                         help='label smoothing factor for cross-entropy loss')
     parser.add_argument('--mask_ratio', type=float, default=0.0,
                         help='fraction of joints to mask per sample for reconstruction loss (0 = disabled)')
+    parser.add_argument('--mask_depth', type=int, default=3,
+                        help='number of frames per masked segment')
     parser.add_argument('--recon_weight', type=float, default=1.0,
                         help='weight of reconstruction loss relative to classification loss')
+    parser.add_argument('--t_max_mult', type=float, default=1.0,
+                        help='multiplier for CosineAnnealingLR T_max')
     parser.add_argument('--freeze_temporal', type=str2bool, default=False,
                         help='freeze all temporal layers (Shift_tcn and stride residuals)')
     return parser
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+def import_class(name):
+    import importlib
+    module_name, class_name = name.rsplit('.', 1)
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)
+
+def load_yaml(parser, yaml_config):
+    
+    parser_args = parser.parse_args()
+
+    with open(yaml_config, 'r') as f:
+        default_arg = yaml.load(f, Loader=yaml.SafeLoader)
+        
+        key = vars(parser_args).keys()
+        for k in default_arg.keys():
+            if k not in key:
+                print('WRONG ARG: {}'.format(k))
+                assert (k in key)
+        
+        parser.set_defaults(**default_arg)
+    
+    return parser.parse_args()
 
 
 class Processor():
@@ -214,24 +244,28 @@ class Processor():
 
         self.global_step = 0
         self.load_model()
-        self.load_optimizer()
         self.load_data()
+        self.load_optimizer()
         self.lr = self.arg.base_lr
         self.best_acc = 0
+
+    def create_weight_sample(self):
+        class_sample_count = np.array([len(np.where(self.train_labels == t)[0]) for t in np.unique(self.train_labels)])
+        weight = 1. / class_sample_count
+        samples_weight = np.array([weight[t] for t in self.train_labels])
+        samples_weight = torch.from_numpy(samples_weight)
+        samples_weigth = samples_weight.double()
+        return WeightedRandomSampler(samples_weight, len(samples_weight))
+
 
     def load_data(self):
         Feeder = import_class(self.arg.feeder)
         self.data_loader = dict()
         if self.arg.phase == 'train':
             train_dataset = Feeder(**self.arg.train_feeder_args)
-            self.train_labels = train_dataset.label  # used by load_model for class weights
             
-            class_sample_count = np.array([len(np.where(self.train_labels == t)[0]) for t in np.unique(self.train_labels)])
-            weight = 1. / class_sample_count
-            samples_weight = np.array([weight[t] for t in self.train_labels])
-            samples_weight = torch.from_numpy(samples_weight)
-            samples_weigth = samples_weight.double()
-            sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+            self.train_labels = train_dataset.label
+            weight_sampler = self.create_weight_sample()
 
             self.data_loader['train'] = torch.utils.data.DataLoader(
                 dataset=train_dataset,
@@ -239,7 +273,8 @@ class Processor():
                 num_workers=self.arg.num_worker,
                 drop_last=True,
                 worker_init_fn=init_seed,
-                sampler=sampler)
+                sampler=weight_sampler)
+
         self.data_loader['test'] = torch.utils.data.DataLoader(
             dataset=Feeder(**self.arg.test_feeder_args),
             batch_size=self.arg.test_batch_size,
@@ -251,39 +286,24 @@ class Processor():
     def load_model(self):
         output_device = self.arg.device[0] if type(self.arg.device) is list else self.arg.device
         self.output_device = output_device
+        
         Model = import_class(self.arg.model)
         shutil.copy2(inspect.getfile(Model), self.arg.work_dir)
+        
         self.model = Model(**self.arg.model_args).cuda(output_device)
 
-        # Class-weighted loss to counter imbalanced label distribution
         if self.arg.phase == 'train':
-            label_path = self.arg.train_feeder_args.get('label_path')
-            if label_path and os.path.exists(label_path):
-                with open(label_path, 'rb') as f:
-                    _, train_labels = pickle.load(f)
-                num_classes = self.arg.model_args['num_class']
-                counts = np.bincount(train_labels, minlength=num_classes).astype(float)
-                counts = np.where(counts == 0, 1, counts)  # avoid division by zero
-                # Sqrt weighting: gentler than inverse-frequency (keeps ratio ~4x not ~15x)
-                w = np.sqrt(len(train_labels) / (num_classes * counts))
-                w = w / w.mean()  # normalize so mean weight = 1 (keeps loss scale ~log(C))
-                class_weights = torch.tensor(w, dtype=torch.float).cuda(output_device)
-                label_smoothing = getattr(self.arg, 'label_smoothing', 0.1)
-                self.loss = nn.CrossEntropyLoss(
-                    weight=class_weights, label_smoothing=label_smoothing
-                ).cuda(output_device)
-                self.print_log('Using sqrt class-weighted loss + label_smoothing={} (min={:.2f} max={:.2f} ratio={:.1f}x)'.format(
-                    label_smoothing,
-                    class_weights.min().item(), class_weights.max().item(),
-                    class_weights.max().item() / class_weights.min().item()))
-            else:
-                self.loss = nn.CrossEntropyLoss().cuda(output_device)
+                
+            label_smoothing = getattr(self.arg, 'label_smoothing', 0.1)
+            self.loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing).cuda(output_device)
+            
         else:
             self.loss = nn.CrossEntropyLoss().cuda(output_device)
 
         if self.arg.weights:
-            # self.global_step = int(arg.weights[:-3].split('-')[-1])
+            
             self.print_log('Load weights from {}.'.format(self.arg.weights))
+            
             if '.pkl' in self.arg.weights:
                 with open(self.arg.weights, 'r') as f:
                     weights = pickle.load(f)
@@ -294,12 +314,6 @@ class Processor():
                 [[k.split('module.')[-1],
                   v.cuda(output_device)] for k, v in weights.items()])
 
-            for w in self.arg.ignore_weights:
-                if weights.pop(w, None) is not None:
-                    self.print_log('Sucessfully Remove Weights: {}.'.format(w))
-                else:
-                    self.print_log('Can Not Remove Weights: {}.'.format(w))
-
             state = self.model.state_dict()
             skipped = []
             for k, v in weights.items():
@@ -309,28 +323,11 @@ class Processor():
                     skipped.append(f'{k}: pretrained {list(v.shape)} vs model {list(state[k].shape)}')
                 else:
                     state[k] = v
-            if skipped:
-                self.print_log('Skipped {} incompatible weight(s):'.format(len(skipped)))
-                for s in skipped:
-                    self.print_log('  ' + s)
-            transferred = len(weights) - len(skipped)
-            self.print_log('Transferred {}/{} layers from pretrained weights.'.format(
-                transferred, len(state)))
             
-            
-            print(state.keys())
-
             self.model.load_state_dict(state, strict=False)
 
         if getattr(self.arg, 'freeze_temporal', False):
             self._freeze_temporal_layers()
-
-        if type(self.arg.device) is list:
-            if len(self.arg.device) > 1:
-                self.model = nn.DataParallel(
-                    self.model,
-                    device_ids=self.arg.device,
-                    output_device=output_device)
 
     def _freeze_temporal_layers(self):
         """Freeze all Shift_tcn and stride-residual (tcn) parameters."""
@@ -342,47 +339,22 @@ class Processor():
         self.print_log(f'Froze {len(frozen)} temporal layer parameters (tcn1 + residuals).')
 
     def load_optimizer(self):
-        if self.arg.optimizer == 'SGD':
-
-            params_dict = dict(self.model.named_parameters())
-            params = []
-
-            for key, value in params_dict.items():
-                decay_mult = 0.0 if 'bias' in key else 1.0
-
-                lr_mult = 1.0
-                weight_decay = 1e-4
-                if 'Linear_weight' in key:
-                    weight_decay = 1e-3
-                elif 'Mask' in key:
-                    weight_decay = 0.0
-                    
-                params += [{'params': value, 'lr': self.arg.base_lr, 'lr_mult': lr_mult, 'decay_mult': decay_mult, 'weight_decay': weight_decay}]
-
-            self.optimizer = optim.SGD(
-                params,
-                momentum=0.9,
-                nesterov=self.arg.nesterov)
-            
-        elif self.arg.optimizer == 'Adam':
-            self.optimizer = optim.Adam(
-                self.model.parameters(),
-                lr=self.arg.base_lr,
-                weight_decay=self.arg.weight_decay)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.arg.base_lr, weight_decay=self.arg.weight_decay)
         
-        elif self.arg.optimizer == 'AdamW':
-            self.optimizer = optim.AdamW(
-                self.model.parameters(),
-                lr=self.arg.base_lr,
-                weight_decay=self.arg.weight_decay)
-
-        else:
-            raise ValueError()
-
-        self.lr_scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1,
-                                              patience=10, verbose=True,
-                                              threshold=1e-4, threshold_mode='rel',
-                                              cooldown=0)
+        warmup_epochs = self.arg.warm_up_epoch
+        steps_per_epoch = len(self.data_loader['train'])
+        total_epochs = self.arg.num_epoch
+        warmup_steps = steps_per_epoch * warmup_epochs
+        cosine_steps = steps_per_epoch * (total_epochs - warmup_epochs)
+        
+        warmup_sched = LinearLR(self.optimizer, start_factor=0.1, total_iters=warmup_steps)
+        cosine_sched = CosineAnnealingLR(self.optimizer, T_max=int(cosine_steps * self.arg.t_max_mult), eta_min=1e-6)
+        
+        self.scheduler = SequentialLR(
+            self.optimizer,
+            schedulers=[warmup_sched, cosine_sched],
+            milestones=[warmup_steps],
+        )
 
     def save_arg(self):
         # save arg
@@ -393,18 +365,6 @@ class Processor():
         with open('{}/config.yaml'.format(self.arg.work_dir), 'w') as f:
             yaml.dump(arg_dict, f)
 
-    def adjust_learning_rate(self, epoch):
-        if self.arg.optimizer == 'SGD' or self.arg.optimizer == 'Adam' or self.arg.optimizer == 'AdamW':
-            if epoch < self.arg.warm_up_epoch:
-                lr = self.arg.base_lr * (epoch + 1) / self.arg.warm_up_epoch
-            else:
-                lr = self.arg.base_lr * (
-                        0.1 ** np.sum(epoch >= np.array(self.arg.step)))
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = lr
-            return lr
-        else:
-            raise ValueError()
 
     def print_time(self):
         localtime = time.asctime(time.localtime(time.time()))
@@ -429,153 +389,127 @@ class Processor():
         return split_time
 
     def train(self, epoch, save_model=False):
+        
         self.model.train()
         self.print_log('Training epoch: {}'.format(epoch + 1))
         loader = self.data_loader['train']
-        self.adjust_learning_rate(epoch)
+        
+
         loss_value = []
         self.record_time()
         timer = dict(dataloader=0.001, model=0.001, statistics=0.001)
         process = tqdm(loader)
 
-        if epoch >= self.arg.only_train_epoch:
-            for key, value in self.model.named_parameters():
-                if 'PA' in key:
-                    value.requires_grad = True
-                    print(key + '-require grad')
-        else:
-            for key, value in self.model.named_parameters():
-                if 'PA' in key:
-                    value.requires_grad = False
-                    print(key + '-not require grad')
         mask_ratio = getattr(self.arg, 'mask_ratio', 0.0)
+        mask_depth = getattr(self.arg, 'mask_depth', 3.0)
         recon_weight = getattr(self.arg, 'recon_weight', 1.0)
 
-        for batch_idx, (data, label, index) in enumerate(process):
-            self.global_step += 1
-            data = data.float().cuda(self.output_device)
-            label = label.long().cuda(self.output_device)
-            timer['dataloader'] += self.split_time()
+        with torch.set_grad_enabled(True):
 
-            # forward
-            start = time.time()
-            if mask_ratio > 0:
-                original_data = data.clone()
-                data_masked, joint_mask = apply_joint_mask(data, 0)
-                output, recon = self.model(data_masked, return_recon=True)
-                cls_loss = self.loss(output, label)
-                # MSE only on masked joints, normalized per masked element
-                inv_mask = 1.0 - joint_mask          # 1 where masked, 0 where visible
-                diff_sq = abs(recon - original_data)
-                n_masked = inv_mask.expand_as(diff_sq).sum().clamp(min=1)
-                recon_loss = diff_sq.sum() / n_masked
-                
-                loss = cls_loss + recon_weight * recon_loss
-            else:
-                output = self.model(data)
-                cls_loss = self.loss(output, label)
-                recon_loss = torch.tensor(0.0)
-                loss = cls_loss
-            network_time = time.time() - start
-
-            # backward
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            loss_value.append(loss.data)
-            timer['model'] += self.split_time()
-
-            _, predict_label = torch.max(output.data, 1)
-            acc = torch.mean((predict_label == label.data).float())
-
-            self.lr = self.optimizer.param_groups[0]['lr']
-
-            if self.global_step % self.arg.log_interval == 0:
-                self.print_log(
-                    '\tBatch({}/{}) done. Loss: {:.4f} (cls:{:.4f} recon:{:.4f})  lr:{:.6f}  t:{:.3f}s'.format(
-                        batch_idx, len(loader), loss.data, cls_loss.data,
-                        recon_loss.data if mask_ratio > 0 else 0.0, self.lr, network_time))
-            timer['statistics'] += self.split_time()
-
-        # statistics of time consumption and loss
-        proportion = {
-            k: '{:02d}%'.format(int(round(v * 100 / sum(timer.values()))))
-            for k, v in timer.items()
-        }
-
-        if save_model:
-            state_dict = self.model.state_dict()
-            weights = OrderedDict([[k.split('module.')[-1],
-                                    v.cpu()] for k, v in state_dict.items()])
-
-            torch.save(weights, self.arg.model_saved_name + '-' + str(epoch) + '-' + str(int(self.global_step)) + '.pt')
-
-    def eval(self, epoch, save_score=False, loader_name=['test'], wrong_file=None, result_file=None):
-        if wrong_file is not None:
-            f_w = open(wrong_file, 'w')
-        if result_file is not None:
-            f_r = open(result_file, 'w')
-        self.model.eval()
-        self.print_log('Eval epoch: {}'.format(epoch + 1))
-        for ln in loader_name:
-            loss_value = []
-            score_frag = []
-            right_num_total = 0
-            total_num = 0
-            loss_total = 0
-            step = 0
-            process = tqdm(self.data_loader[ln])
             for batch_idx, (data, label, index) in enumerate(process):
-                data = Variable(
-                    data.float().cuda(self.output_device),
-                    requires_grad=False)
-                label = Variable(
-                    label.long().cuda(self.output_device),
-                    requires_grad=False)
+                self.global_step += 1
+                data = data.float().cuda(self.output_device)
+                label = label.long().cuda(self.output_device)
+                timer['dataloader'] += self.split_time()
 
-                with torch.no_grad():
+                # forward
+                start = time.time()
+                
+                if mask_ratio > 0:
+                    original_data = data.clone()
+                    data_masked, joint_mask = apply_joint_zero_mask(data, mask_ratio, mask_depth)
+                    
+                    output, recon = self.model(data_masked, return_recon=True)
+                    cls_loss = self.loss(output, label)
+                    
+                    diff_abs = abs(recon - original_data)
+                    n_masked = joint_mask.sum()
+                    
+                    recon_loss = diff_abs.sum() / n_masked
+                    
+                    loss = cls_loss + recon_weight * recon_loss
+
+                else:
+
                     output = self.model(data)
+                    cls_loss = self.loss(output, label)
+                    recon_loss = torch.tensor(0.0)
+                    loss = cls_loss
 
-                loss = self.loss(output, label)
-                score_frag.append(output.data.cpu().numpy())
-                loss_value.append(loss.data.cpu().numpy())
+                network_time = time.time() - start
+
+                # backward
+                self.optimizer.zero_grad()
+                loss.backward()
+                
+                self.optimizer.step()
+                self.scheduler.step()
+                
+                loss_value.append(loss.data)
+                timer['model'] += self.split_time()
 
                 _, predict_label = torch.max(output.data, 1)
-                step += 1
+                acc = torch.mean((predict_label == label.data).float())
 
-                if wrong_file is not None or result_file is not None:
-                    predict = list(predict_label.cpu().numpy())
-                    true = list(label.data.cpu().numpy())
-                    for i, x in enumerate(predict):
-                        if result_file is not None:
-                            f_r.write(str(x) + ',' + str(true[i]) + '\n')
-                        if x != true[i] and wrong_file is not None:
-                            f_w.write(str(index[i]) + ',' + str(x) + ',' + str(true[i]) + '\n')
-            score = np.concatenate(score_frag)
+                self.lr = self.optimizer.param_groups[0]['lr']
 
-            accuracy = self.data_loader[ln].dataset.top_k(score, 1)
-            if accuracy > self.best_acc:
-                self.best_acc = accuracy
-                score_dict = dict(
-                    zip(self.data_loader[ln].dataset.sample_name, score))
+                if self.global_step % self.arg.log_interval == 0:
+                    self.print_log(
+                        '\tBatch({}/{}) done. Loss: {:.4f} (cls:{:.4f} recon:{:.4f})  lr:{:.6f}  t:{:.3f}s'.format(
+                            batch_idx, len(loader), loss.data, cls_loss.data,
+                            recon_loss.data if mask_ratio > 0 else 0.0, self.lr, network_time))
+        
+        timer['statistics'] += self.split_time()
 
-                with open('./work_dir/' + arg.Experiment_name + '/eval_results/best_acc' +'.pkl'.format(
-                        epoch, accuracy), 'wb') as f:
-                    pickle.dump(score_dict, f)
 
-            print('Eval Accuracy: ', accuracy, ' model: ', self.arg.model_saved_name)
+    def eval(self, epoch, save_score=False, loader_name='test'):
 
-            score_dict = dict(
-                zip(self.data_loader[ln].dataset.sample_name, score))
-            self.print_log('\tMean {} loss of {} batches: {}.'.format(
-                ln, len(self.data_loader[ln]), np.mean(loss_value)))
-            for k in self.arg.show_topk:
-                self.print_log('\tTop{}: {:.2f}%'.format(
-                    k, 100 * self.data_loader[ln].dataset.top_k(score, k)))
+        self.model.eval()
+        self.print_log('Eval epoch: {}'.format(epoch + 1))
+        
+        ln = loader_name
 
-            with open('./work_dir/' + arg.Experiment_name + '/eval_results/epoch_' + str(epoch) + '_' + str(accuracy) + '.pkl'.format(
-                    epoch, accuracy), 'wb') as f:
-                pickle.dump(score_dict, f)
+        loss_value = []
+        score_frag = []
+        step = 0
+        process = tqdm(self.data_loader[ln])
+        
+        for batch_idx, (data, label, index) in enumerate(process):
+            
+            data = Variable(
+                data.float().cuda(self.output_device),
+                requires_grad=False)
+            
+            label = Variable(
+                label.long().cuda(self.output_device),
+                requires_grad=False)
+
+            with torch.no_grad():
+                output = self.model(data)
+
+            loss = self.loss(output, label)
+            
+            score_frag.append(output.data.cpu().numpy())
+            loss_value.append(loss.data.cpu().numpy())
+
+            _, predict_label = torch.max(output.data, 1)
+            step += 1
+
+        score = np.concatenate(score_frag)
+        accuracy = self.data_loader[ln].dataset.top_k(score, 1)
+        
+        if accuracy > self.best_acc:
+            self.best_acc = accuracy
+            print("BEST ACCURACY!!!!!")
+
+        print('Eval Accuracy: ', accuracy, ' model: ', self.arg.model_saved_name)
+
+        self.print_log('\tMean {} loss of {} batches: {}.'.format(
+            ln, len(self.data_loader[ln]), np.mean(loss_value)))
+
+        for k in self.arg.show_topk:
+            self.print_log('\tTop{}: {:.2f}%'.format(
+                k, 100 * self.data_loader[ln].dataset.top_k(score, k)))
 
     def start(self):
         if self.arg.phase == 'train':
@@ -588,57 +522,27 @@ class Processor():
                 self.eval(
                     epoch,
                     save_score=self.arg.save_score,
-                    loader_name=['test'])
+                    loader_name='test')
 
             print('best accuracy: ', self.best_acc, ' model_name: ', self.arg.model_saved_name)
 
         elif self.arg.phase == 'test':
-            if not self.arg.test_feeder_args['debug']:
-                wf = self.arg.model_saved_name + '_wrong.txt'
-                rf = self.arg.model_saved_name + '_right.txt'
-            else:
-                wf = rf = None
             if self.arg.weights is None:
                 raise ValueError('Please appoint --weights.')
             self.arg.print_log = False
             self.print_log('Model:   {}.'.format(self.arg.model))
             self.print_log('Weights: {}.'.format(self.arg.weights))
-            self.eval(epoch=0, save_score=self.arg.save_score, loader_name=['test'], wrong_file=wf, result_file=rf)
+            self.eval(epoch=0, save_score=self.arg.save_score, loader_name='test')
             self.print_log('Done.\n')
-
-
-def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
-def import_class(name):
-    import importlib
-    module_name, class_name = name.rsplit('.', 1)
-    module = importlib.import_module(module_name)
-    return getattr(module, class_name)
-
 
 if __name__ == '__main__':
     parser = get_parser()
 
-    # load arg form config file
-    p = parser.parse_args()
-    if p.config is not None:
-        with open(p.config, 'r') as f:
-            default_arg = yaml.load(f, Loader=yaml.SafeLoader)
-        key = vars(p).keys()
-        for k in default_arg.keys():
-            if k not in key:
-                print('WRONG ARG: {}'.format(k))
-                assert (k in key)
-        parser.set_defaults(**default_arg)
-
     arg = parser.parse_args()
+    
+    if arg.config is not None:
+        arg = load_yaml(parser, arg.config)
+
     init_seed(0)
     processor = Processor(arg)
     processor.start()
