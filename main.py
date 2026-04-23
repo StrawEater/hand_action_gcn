@@ -11,6 +11,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data.sampler import WeightedRandomSampler
 from torch.autograd import Variable
 from tqdm import tqdm
 # from tensorboardX import SummaryWriter
@@ -224,13 +225,21 @@ class Processor():
         if self.arg.phase == 'train':
             train_dataset = Feeder(**self.arg.train_feeder_args)
             self.train_labels = train_dataset.label  # used by load_model for class weights
+            
+            class_sample_count = np.array([len(np.where(self.train_labels == t)[0]) for t in np.unique(self.train_labels)])
+            weight = 1. / class_sample_count
+            samples_weight = np.array([weight[t] for t in self.train_labels])
+            samples_weight = torch.from_numpy(samples_weight)
+            samples_weigth = samples_weight.double()
+            sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+
             self.data_loader['train'] = torch.utils.data.DataLoader(
                 dataset=train_dataset,
                 batch_size=self.arg.batch_size,
-                shuffle=True,
                 num_workers=self.arg.num_worker,
                 drop_last=True,
-                worker_init_fn=init_seed)
+                worker_init_fn=init_seed,
+                sampler=sampler)
         self.data_loader['test'] = torch.utils.data.DataLoader(
             dataset=Feeder(**self.arg.test_feeder_args),
             batch_size=self.arg.test_batch_size,
@@ -452,14 +461,15 @@ class Processor():
             start = time.time()
             if mask_ratio > 0:
                 original_data = data.clone()
-                data_masked, joint_mask = apply_joint_mask(data, mask_ratio)
+                data_masked, joint_mask = apply_joint_mask(data, 0)
                 output, recon = self.model(data_masked, return_recon=True)
                 cls_loss = self.loss(output, label)
                 # MSE only on masked joints, normalized per masked element
                 inv_mask = 1.0 - joint_mask          # 1 where masked, 0 where visible
-                diff_sq = (recon - original_data) ** 2 * inv_mask
+                diff_sq = abs(recon - original_data)
                 n_masked = inv_mask.expand_as(diff_sq).sum().clamp(min=1)
                 recon_loss = diff_sq.sum() / n_masked
+                
                 loss = cls_loss + recon_weight * recon_loss
             else:
                 output = self.model(data)

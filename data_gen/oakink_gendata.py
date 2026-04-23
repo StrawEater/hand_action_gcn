@@ -25,7 +25,7 @@ import pickle
 import numpy as np
 
 
-OAKINK_ROOT = "/home/juani/OakInkV2_jpeg"
+OAKINK_ROOT = "/workspace/OakInkV2_jpeg"
 KEYPOINT_DIR = os.path.join(OAKINK_ROOT, "hand_keypoints")
 LABEL_MAP_PATH = os.path.join(OAKINK_ROOT, "label_map.json")
 SPLIT_DIR = os.path.join(OAKINK_ROOT, "label_split")
@@ -153,9 +153,9 @@ def process_split(split_name, split_file, id_to_action, action_to_new_id,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--frames", type=int, default=32,
+    parser.add_argument("--frames", type=int, default=16,
                         help="Clip length T. Must be >= 9.")
-    parser.add_argument("--stride", type=int, default=None,
+    parser.add_argument("--stride", type=int, default=8,
                         help="Sliding window stride. Default: same as --frames "
                              "(non-overlapping). Use --frames//2 for 50%% overlap.")
     parser.add_argument("--min-samples", type=int, default=25,

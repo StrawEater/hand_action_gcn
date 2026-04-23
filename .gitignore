@@ -10,3 +10,4 @@ work_dir/oakink_ShiftGCN_hand_joint/*
 model/Temporal_shift/cuda/__pycache__/*
 graph/__pycache__/*
 feeders/__pycache__/*
+model/__pycache__/*

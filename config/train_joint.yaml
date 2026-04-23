@@ -1,6 +1,6 @@
 Experiment_name: oakink_ShiftGCN_hand_joint
 base_lr: 1.0e-3
-batch_size: 32
+batch_size: 128
 config: config/train_joint.yaml
 device:
 - 0
@@ -21,12 +21,11 @@ model_saved_name: ./save_models/oakink_ShiftGCN_hand_joint
 nesterov: true
 num_epoch: 100
 num_worker: 12
-only_train_epoch: 1
-only_train_part: true
+only_train_epoch: 5
 optimizer: Adam
 phase: train
 print_log: true
-save_interval: 2
+save_interval: 100
 save_score: false
 seed: 1
 show_topk:
@@ -37,27 +36,26 @@ step:
 - 40
 - 60
 - 80
-test_batch_size: 32
+test_batch_size: 128
 test_feeder_args:
   data_path: ./data/oakink/val_data_joint.npy
   debug: false
   label_path: ./data/oakink/val_label.pkl
   normalization: false
-  window_size: 32
+  window_size: 8
 train_feeder_args:
   data_path: ./data/oakink/train_data_joint.npy
   debug: false
   label_path: ./data/oakink/train_label.pkl
   normalization: false
-  random_choose: true
+  random_choose: false
   random_move: false
-  random_shift: true
-  window_size: 32
+  random_shift: false
+  window_size: 8
 warm_up_epoch: 5
-weight_decay: 0.01
+weight_decay: 0.001
 label_smoothing: 0.1
-mask_ratio: 0.0
-recon_weight: 1.0
+mask_ratio: 0.001
+recon_weight: 0.1
 freeze_temporal: false
-weights: /home/juani/Shift-GCN/save_models/ntu120_ShiftGCN_joint_xsub.pt
 work_dir: ./work_dir/oakink_ShiftGCN_hand_joint
