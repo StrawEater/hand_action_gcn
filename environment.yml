@@ -1,4 +1,4 @@
-name: gcn
+name: gcn_2
 channels:
   - pytorch
   - nvidia
@@ -14,16 +14,18 @@ dependencies:
   - pyyaml
   - tqdm
   - pillow
-  - einops          # SkeletonMamba: rearrange ops
-  - matplotlib      # sweep result plots
-  - pip:
-    - timm          # SkeletonMamba: trunc_normal_, DropPath
-    - causal-conv1d # required by mamba_ssm (install first)
-    - mamba-ssm     # SkeletonMamba: Mamba blocks + RMSNorm
+  - einops
+  - matplotlib
+  - timm
 
-# After creating the environment, build the CUDA shift extension:
-#   cd model/Temporal_shift/cuda && pip install -e .
+# After creating the environment, run these steps:
 #
-# mamba_ssm requires CUDA >= 11.6 and GPU compute capability >= 7.0
-# To force rebuild from source:
-#   CAUSAL_CONV1D_FORCE_BUILD=TRUE MAMBA_FORCE_BUILD=TRUE pip install mamba-ssm
+# 1. Build the CUDA shift extension (Shift-GCN):
+#      conda activate gcn_2
+#      cd model/Temporal_shift/cuda && pip install -e . && cd ../../..
+#
+# 2. Install mamba-ssm (SkeletonMamba) — requires a real GPU with CUDA:
+#      conda activate gcn_2
+#      pip install causal-conv1d mamba-ssm
+#    If pip can't find a pre-built wheel and tries to compile, force it:
+#      CAUSAL_CONV1D_FORCE_BUILD=TRUE MAMBA_FORCE_BUILD=TRUE pip install causal-conv1d mamba-ssm
