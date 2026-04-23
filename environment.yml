@@ -1,0 +1,19 @@
+name: gcn
+channels:
+  - defaults
+  - nvidia
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - torch==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+    - torchvision==0.20.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+    - torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+    - numpy==2.2.6
+    - pyyaml
+    - tqdm
+    - pillow
+
+# After creating the environment, build the CUDA shift extension:
+#   cd model/Temporal_shift/cuda
+#   pip install -e .

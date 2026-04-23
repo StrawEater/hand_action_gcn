@@ -1,0 +1,12 @@
+data/oakink/*
+**/__pycache/**
+**/**/__pycache/**
+**/**/**/__pycache/**
+**/**/**/**/__pycache/**
+**/__pycache/**
+model/Temporal_shift/cuda/build/*
+save_models/oakink_ShiftGCN_hand_joint**
+work_dir/oakink_ShiftGCN_hand_joint/*
+model/Temporal_shift/cuda/__pycache__/*
+graph/__pycache__/*
+feeders/__pycache__/*
