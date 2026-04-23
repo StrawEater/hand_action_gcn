@@ -18,6 +18,7 @@ from tqdm import tqdm
 import shutil
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import random
+import copy
 import inspect
 import torch.backends.cudnn as cudnn
 
@@ -52,10 +53,11 @@ def create_joint_mask(x, mask_ratio, depth):
         time_frame_segment_idx = idx // one_hand
         joint_segment_idx = idx % one_hand
 
-        mask_time_frame_segment_start = time_frame_segment_idx * depth
-        mask_time_frame_segment_end = mask_time_frame_segment_start + depth
-
-        joint_mask[i, 0, mask_time_frame_segment_start:mask_time_frame_segment_end , joint_segment_idx, 0] = 1
+        for j in range(n_mask):
+            start = int(time_frame_segment_idx[j]) * depth
+            end = start + depth
+            joint_idx = int(joint_segment_idx[j])
+            joint_mask[i, 0, start:end, joint_idx, 0] = 1
     
     both_hand_mask = joint_mask.repeat_interleave(2, dim=3)  # dim=3 is V
 
@@ -295,36 +297,84 @@ class Processor():
         if self.arg.phase == 'train':
                 
             label_smoothing = getattr(self.arg, 'label_smoothing', 0.1)
-            self.loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing).cuda(output_device)
+            self.loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing).cuda(self.output_device)
             
         else:
             self.loss = nn.CrossEntropyLoss().cuda(output_device)
 
+        print(self.arg.weights)
+
         if self.arg.weights:
-            
+
+            device = next(self.model.parameters()).device
             self.print_log('Load weights from {}.'.format(self.arg.weights))
             
-            if '.pkl' in self.arg.weights:
-                with open(self.arg.weights, 'r') as f:
-                    weights = pickle.load(f)
-            else:
-                weights = torch.load(self.arg.weights, weights_only=True)
-
-            weights = OrderedDict(
-                [[k.split('module.')[-1],
-                  v.cuda(output_device)] for k, v in weights.items()])
-
-            state = self.model.state_dict()
-            skipped = []
-            for k, v in weights.items():
-                if k not in state:
-                    skipped.append(f'{k} (not in model)')
-                elif v.shape != state[k].shape:
-                    skipped.append(f'{k}: pretrained {list(v.shape)} vs model {list(state[k].shape)}')
-                else:
-                    state[k] = v
+            checkpoint = torch.load(self.arg.weights, map_location=device, weights_only=True)
+            checkpoint = OrderedDict([(k.split('module.')[-1], v) for k, v in checkpoint.items()])
             
-            self.model.load_state_dict(state, strict=False)
+            model_state = self.model.state_dict()
+            skipped = []
+            filtered = OrderedDict()
+            
+            for k, v in checkpoint.items():
+                if k not in model_state:
+                    skipped.append(f'{k} (not in model)')
+                elif v.shape != model_state[k].shape:
+                    skipped.append(f'{k}: checkpoint {list(v.shape)} vs model {list(model_state[k].shape)}')
+                else:
+                    filtered[k] = v
+            
+            model_state.update(filtered)
+            result = self.model.load_state_dict(model_state, strict=False)
+            print("Missing keys:", result.missing_keys)
+            print("Unexpected keys:", result.unexpected_keys)
+            print("Skipped:", skipped)
+
+            # if '.pkl' in self.arg.weights:
+            #     with open(self.arg.weights, 'r') as f:
+            #         weights = pickle.load(f)
+            # else:
+            #     weights = torch.load(self.arg.weights, weights_only=True)
+
+            # weights = OrderedDict(
+            #     [[k.split('module.')[-1],
+            #       v.cuda(output_device)] for k, v in weights.items()])
+
+            # print("output_device:", output_device)
+            # print("model device:", next(self.model.parameters()).device)
+
+            # weights_raw = torch.load(self.arg.weights, weights[_only=True)
+            # first_key = next(iter(weights_raw.keys()))
+            # first_tensor = weights_raw[first_key]
+            # model_tensor = self.model.state_dict()[first_key.split('module.')[-1]]
+
+            # print(f"Key: {first_key}")
+            # print(f"Checkpoint values: {first_tensor.flatten()[:5]}")
+            # print(f"Model values:      {model_tensor.flatten()[:5]}")
+            # print(f"Are identical:     {torch.equal(first_tensor.cpu(), model_tensor.cpu())}")
+
+
+            # state = copy.deepcopy(self.model.state_dict())
+
+            # skipped = []
+            # for k, v in weights.items():
+            #     if k not in state:
+            #         skipped.append(f'{k} (not in model)')
+            #     elif v.shape != state[k].shape:
+            #         skipped.append(f'{k}: pretrained {list(v.shape)} vs model {list(state[k].shape)}')
+            #     else:
+            #         state[k] = v
+
+            # before = next(self.model.parameters()).clone()
+            # result = self.model.load_state_dict(state, strict=False)
+            # print("Missing keys:", result.missing_keys)
+            # print("Unexpected keys:", result.unexpected_keys)
+            # after = next(self.model.parameters())
+            # print("Weights changed:", not torch.equal(before, after))
+
+            # result = self.model.load_state_dict(state, strict=False)
+            # print("Missing keys:", result.missing_keys)
+            # print("Unexpected keys:", result.unexpected_keys)
 
         if getattr(self.arg, 'freeze_temporal', False):
             self._freeze_temporal_layers()
@@ -404,6 +454,19 @@ class Processor():
         mask_depth = getattr(self.arg, 'mask_depth', 3.0)
         recon_weight = getattr(self.arg, 'recon_weight', 1.0)
 
+        
+        if epoch > self.arg.warm_up_epoch:
+            dist = epoch - self.arg.warm_up_epoch
+            
+            last_epoch_dist = 35
+            coef = (last_epoch_dist - dist) / last_epoch_dist
+            
+            label_smoothing = 0.25 * (coef)
+            
+            self.loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing).cuda(self.output_device)
+
+
+
         with torch.set_grad_enabled(True):
 
             for batch_idx, (data, label, index) in enumerate(process):
@@ -415,23 +478,25 @@ class Processor():
                 # forward
                 start = time.time()
                 
-                if mask_ratio > 0:
+                if mask_ratio > 0 and epoch <= self.arg.warm_up_epoch:
                     original_data = data.clone()
                     data_masked, joint_mask = apply_joint_zero_mask(data, mask_ratio, mask_depth)
                     
-                    output, recon = self.model(data_masked, return_recon=True)
+                    output = self.model(data, return_recon=False)
+                    _, recon = self.model(data_masked, return_recon=True)
+                    
                     cls_loss = self.loss(output, label)
-                    
-                    diff_abs = abs(recon - original_data)
+
+                    diff_abs = torch.abs(recon - original_data)
                     n_masked = joint_mask.sum()
-                    
-                    recon_loss = diff_abs.sum() / n_masked
+
+                    recon_loss = (diff_abs * joint_mask).sum() / n_masked
                     
                     loss = cls_loss + recon_weight * recon_loss
 
                 else:
 
-                    output = self.model(data)
+                    output = self.model(data, return_recon=False)
                     cls_loss = self.loss(output, label)
                     recon_loss = torch.tensor(0.0)
                     loss = cls_loss
@@ -463,53 +528,46 @@ class Processor():
 
 
     def eval(self, epoch, save_score=False, loader_name='test'):
-
         self.model.eval()
         self.print_log('Eval epoch: {}'.format(epoch + 1))
-        
-        ln = loader_name
 
         loss_value = []
         score_frag = []
-        step = 0
-        process = tqdm(self.data_loader[ln])
-        
+        process = tqdm(self.data_loader[loader_name])
+
         for batch_idx, (data, label, index) in enumerate(process):
-            
-            data = Variable(
-                data.float().cuda(self.output_device),
-                requires_grad=False)
-            
-            label = Variable(
-                label.long().cuda(self.output_device),
-                requires_grad=False)
+            data = data.float().cuda(self.output_device)
+            label = label.long().cuda(self.output_device)
 
             with torch.no_grad():
                 output = self.model(data)
+                loss = self.loss(output, label)
 
-            loss = self.loss(output, label)
-            
-            score_frag.append(output.data.cpu().numpy())
-            loss_value.append(loss.data.cpu().numpy())
-
-            _, predict_label = torch.max(output.data, 1)
-            step += 1
+            score_frag.append(output.cpu().numpy())
+            loss_value.append(loss.item())
 
         score = np.concatenate(score_frag)
-        accuracy = self.data_loader[ln].dataset.top_k(score, 1)
-        
+        accuracy = self.data_loader[loader_name].dataset.top_k(score, 1)
+
         if accuracy > self.best_acc:
             self.best_acc = accuracy
-            print("BEST ACCURACY!!!!!")
+            # self.save_model(epoch)
+            self.print_log('New best accuracy: {:.2f}%'.format(accuracy * 100))
 
-        print('Eval Accuracy: ', accuracy, ' model: ', self.arg.model_saved_name)
-
-        self.print_log('\tMean {} loss of {} batches: {}.'.format(
-            ln, len(self.data_loader[ln]), np.mean(loss_value)))
-
+        self.print_log('Eval Accuracy: {:.2f}% | Model: {}'.format(
+            accuracy * 100, self.arg.model_saved_name))
+        self.print_log('Mean {} loss of {} batches: {:.4f}'.format(
+            loader_name, len(self.data_loader[loader_name]), np.mean(loss_value)))
         for k in self.arg.show_topk:
-            self.print_log('\tTop{}: {:.2f}%'.format(
-                k, 100 * self.data_loader[ln].dataset.top_k(score, k)))
+            self.print_log('Top{}: {:.2f}%'.format(
+                k, 100 * self.data_loader[loader_name].dataset.top_k(score, k)))
+
+
+
+
+
+
+
 
     def start(self):
         if self.arg.phase == 'train':

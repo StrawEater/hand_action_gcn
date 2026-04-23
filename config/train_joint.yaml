@@ -33,6 +33,9 @@ test_feeder_args:
   debug: false
   label_path: ./data/oakink/val_label.pkl
   normalization: false
+  random_choose: true
+  random_move: false
+  random_shift: false
   window_size: 8
 
 train_feeder_args:
@@ -41,17 +44,18 @@ train_feeder_args:
   label_path: ./data/oakink/train_label.pkl
   normalization: false
   random_choose: true
-  random_move: false
-  random_shift: false
+  random_move: true
+  random_shift: true
   window_size: 8
 
 warm_up_epoch: 5
 t_max_mult: 1
 
 weight_decay: 0.001
-label_smoothing: 0.1
-mask_ratio: 0.001
-mask_depth: 3
-recon_weight: 0.1
+label_smoothing: 0.25
+mask_ratio: 0
+mask_depth: 4
+recon_weight: 10
 freeze_temporal: false
 work_dir: ./work_dir/oakink_ShiftGCN_hand_joint
+weights: ./save_models/ntu120_ShiftGCN_joint_xsub.pt
