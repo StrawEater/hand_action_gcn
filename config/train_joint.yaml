@@ -40,7 +40,7 @@ train_feeder_args:
   debug: false
   label_path: ./data/oakink/train_label.pkl
   normalization: false
-  random_choose: false
+  random_choose: true
   random_move: false
   random_shift: false
   window_size: 8

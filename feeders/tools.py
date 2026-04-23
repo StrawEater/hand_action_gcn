@@ -60,6 +60,7 @@ def random_move(data_numpy,
                 scale_candidate=[0.9, 1.0, 1.1],
                 transform_candidate=[-0.2, -0.1, 0.0, 0.1, 0.2],
                 move_time_candidate=[1]):
+                
     # input: C,T,V,M
     C, T, V, M = data_numpy.shape
     move_time = random.choice(move_time_candidate)
