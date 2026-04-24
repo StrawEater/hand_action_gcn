@@ -491,12 +491,11 @@ class Processor():
                 # forward
                 start = time.time()
                 
-                if mask_ratio > 0 and epoch <= self.arg.warm_up_epoch:
+                if mask_ratio > 0:
                     original_data = data.clone()
                     data_masked, joint_mask = apply_joint_zero_mask(data, mask_ratio, mask_depth)
 
-                    output = self.model(data, return_recon=False)
-                    _, recon = self.model(data_masked, return_recon=True)
+                    output, recon = self.model(data_masked, return_recon=True)
 
                     if recon is None:
                         raise RuntimeError(

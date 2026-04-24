@@ -11,3 +11,4 @@ model/Temporal_shift/cuda/__pycache__/*
 graph/__pycache__/*
 feeders/__pycache__/*
 model/__pycache__/*
+work_dir/*
