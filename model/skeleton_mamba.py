@@ -186,8 +186,8 @@ class SkeletonMambaModel(nn.Module):
     """
 
     _SIZES = {
-        'tiny':   {'depth': 12, 'embed_dim': 192},
-        'medium': {'depth': 16, 'embed_dim': 192},
+        'tiny':   {'depth': 6, 'embed_dim': 192},
+        'medium': {'depth': 10, 'embed_dim': 192},
         'large':  {'depth': 24, 'embed_dim': 384},
     }
 

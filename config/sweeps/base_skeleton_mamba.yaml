@@ -2,7 +2,7 @@
 base: config/train_joint.yaml
 
 Experiment_name: sweep_skeleton_mamba
-num_epoch: 60
+num_epoch: 35
 eval_interval: 5
 weights: null
 

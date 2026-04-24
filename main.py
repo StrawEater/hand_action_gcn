@@ -468,15 +468,15 @@ class Processor():
         recon_weight = getattr(self.arg, 'recon_weight', 1.0)
 
         
-        if epoch > self.arg.warm_up_epoch:
-            dist = epoch - self.arg.warm_up_epoch
+        # if epoch > self.arg.warm_up_epoch:
+        #     dist = epoch - self.arg.warm_up_epoch
             
-            last_epoch_dist = 35
-            coef = (last_epoch_dist - dist) / last_epoch_dist
+        #     last_epoch_dist = 35
+        #     coef = (last_epoch_dist - dist) / last_epoch_dist
             
-            label_smoothing = 0.25 * (coef)
+        #     label_smoothing = 0.25 * (coef)
             
-            self.loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing).cuda(self.output_device)
+        #     self.loss = nn.CrossEntropyLoss(label_smoothing=label_smoothing).cuda(self.output_device)
 
 
 

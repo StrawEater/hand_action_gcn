@@ -52,7 +52,7 @@ warm_up_epoch: 5
 t_max_mult: 1
 
 weight_decay: 0.001
-label_smoothing: 0.25
+label_smoothing: 0.1
 mask_ratio: 0
 mask_depth: 4
 recon_weight: 10

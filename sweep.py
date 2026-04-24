@@ -10,6 +10,8 @@ import argparse
 import os
 import sys
 import traceback
+import gc
+import torch
 
 from training.utils import load_config, is_sweep, expand_sweep
 from main import make_arg_from_dict, Processor, init_seed
@@ -48,6 +50,10 @@ def run_sweep(sweep_yaml: str, dry_run: bool = False):
             continue
 
         try:
+
+            gc.collect()
+            torch.cuda.empty_cache()
+
             init_seed(0)
             arg = make_arg_from_dict(run_cfg)
             processor = Processor(arg, non_interactive=True)
@@ -69,10 +75,15 @@ def run_sweep(sweep_yaml: str, dry_run: bool = False):
 
 
 if __name__ == '__main__':
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    
     parser = argparse.ArgumentParser(description='Run a hyperparameter sweep')
     parser.add_argument('sweep_config', help='Path to sweep YAML')
     parser.add_argument('--dry-run', action='store_true', help='Print configs without training')
     args = parser.parse_args()
+
+    gc.collect()
+    torch.cuda.empty_cache()
 
     success = run_sweep(args.sweep_config, dry_run=args.dry_run)
     sys.exit(0 if success else 1)

@@ -38,6 +38,14 @@ def load_config(path: str) -> dict:
 def is_sweep(cfg: dict) -> bool:
     return 'sweep' in cfg
 
+def define_configuration(base_configuration, key, value):
+    parts = key.split('.')
+    d = base_configuration
+    for part in parts[:-1]:
+        if part not in d or not isinstance(d[part], dict):
+            d[part] = {}
+        d = d[part]
+    d[parts[-1]] = value
 
 def expand_sweep(cfg: dict) -> list:
     """
@@ -83,14 +91,15 @@ def expand_sweep(cfg: dict) -> list:
     for combo in itertools.product(*labeled_values):
         run_cfg = copy.deepcopy(base_cfg)
         suffix_parts = []
+        
         for k, (label, v) in zip(keys, combo):
-            parts = k.split('.')
-            d = run_cfg
-            for part in parts[:-1]:
-                if part not in d or not isinstance(d[part], dict):
-                    d[part] = {}
-                d = d[part]
-            d[parts[-1]] = v
+            
+            if isinstance(v, dict):
+                for v_key, v_value in v.items():
+                    define_configuration(run_cfg, v_key, v_value)
+            else:
+                define_configuration(run_cfg, k, v)
+
             suffix_parts.append(label)
 
         suffix = '__'.join(suffix_parts)

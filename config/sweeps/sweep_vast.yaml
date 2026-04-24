@@ -10,18 +10,18 @@ sweep:
     model_args.model_size:
       tiny:   tiny
       medium: medium
-      large:  large
     train_feeder_args.data_fraction:
       25pct: 0.25
       50pct: 0.50
       full:  1.0
-    label_smoothing:
-      ls0:    0.0
-      ls01:   0.1
-      ls025:  0.25
     mask_ratio:
-      unmasked: 0.0
-      masked:   0.25
-    train_feeder_args.random_move:
-      no_transform: false
-      with_transform: true
+      unmasked:    0.0
+      25-masked:   0.25
+      50-masked:   0.50
+    transformations:
+      transforms_on:
+        train_feeder_args.random_move: true  
+        train_feeder_args.random_shift: true
+      transforms_off:
+        train_feeder_args.random_move: false  
+        train_feeder_args.random_shift: false
