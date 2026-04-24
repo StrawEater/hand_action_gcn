@@ -571,6 +571,7 @@ class Processor():
         if accuracy > self.best_acc:
             self.best_acc = accuracy
             self.print_log('New best accuracy: {:.2f}%'.format(accuracy * 100))
+            torch.save(self.model.state_dict(), os.path.join(self.arg.work_dir, 'best_model.pt'))
 
         # Structured per-epoch metrics for sweep analysis
         metrics_path = os.path.join(self.arg.work_dir, 'metrics.jsonl')
@@ -605,6 +606,8 @@ class Processor():
                     epoch,
                     save_score=self.arg.save_score,
                     loader_name='test')
+
+                torch.save(self.model.state_dict(), os.path.join(self.arg.work_dir, 'last_model.pt'))
 
             print('best accuracy: ', self.best_acc, ' model_name: ', self.arg.model_saved_name)
 
