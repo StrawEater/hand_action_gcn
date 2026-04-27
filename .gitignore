@@ -12,3 +12,5 @@ graph/__pycache__/*
 feeders/__pycache__/*
 model/__pycache__/*
 work_dir/*
+plots/
+data/unified/

@@ -5,19 +5,16 @@
 # For a quick first pass use sweep_vast_quick.yaml (18 runs).
 
 sweep:
-  base: config/sweeps/base_skeleton_mamba.yaml
+  base: config/sweeps/base_skeleton_mamba_unified.yaml
   grid:
     model_args.model_size:
-      tiny:   tiny
       medium: medium
     train_feeder_args.data_fraction:
       25pct: 0.25
       50pct: 0.50
       full:  1.0
     mask_ratio:
-      unmasked:    0.0
       25-masked:   0.25
-      50-masked:   0.50
     transformations:
       transforms_on:
         train_feeder_args.random_move: true  
