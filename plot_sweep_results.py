@@ -81,6 +81,8 @@ def collect_runs(sweep_dir: str, model_filter: str = None):
     for entry in sorted(Path(sweep_dir).iterdir()):
         if not entry.is_dir():
             continue
+        if 'unified' not in str(entry):
+            continue
         result = load_run(entry)
         if result is None:
             continue
