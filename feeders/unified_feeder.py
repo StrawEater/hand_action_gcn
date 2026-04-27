@@ -4,6 +4,7 @@ import sys
 
 sys.path.extend(['../'])
 from feeders.feeder import Feeder
+from feeders import tools
 
 
 class UnifiedFeeder(Feeder):
@@ -48,6 +49,28 @@ class UnifiedFeeder(Feeder):
             self.wrist = np.load(self._wrist_path, mmap_mode='r' if self.use_mmap else None)
         else:
             self.wrist = None
+
+    def __getitem__(self, index):
+        data_numpy = np.array(self.data[index])   # (3, T, 42, 1)
+        label = self.label[index]
+
+        if self.wrist is not None:
+            wrist_numpy = np.array(self.wrist[index])          # (T, 2, 3)
+            data_numpy[:, :, 0,  0] = wrist_numpy[:, 0, :].T  # left wrist  → joint 0
+            data_numpy[:, :, 21, 0] = wrist_numpy[:, 1, :].T  # right wrist → joint 21
+
+        if self.normalization:
+            data_numpy = (data_numpy - self.mean_map) / self.std_map
+        if self.random_shift:
+            data_numpy = tools.random_shift(data_numpy)
+        if self.random_choose:
+            data_numpy = tools.random_choose(data_numpy, self.window_size)
+        elif self.window_size > 0:
+            data_numpy = tools.auto_pading(data_numpy, self.window_size)
+        if self.random_move:
+            data_numpy = tools.random_move(data_numpy)
+
+        return data_numpy, label, index
 
     def get_source_weights(self):
         """

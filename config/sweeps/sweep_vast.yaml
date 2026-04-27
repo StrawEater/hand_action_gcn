@@ -8,7 +8,7 @@ sweep:
   base: config/sweeps/base_skeleton_mamba_unified.yaml
   grid:
     model_args.model_size:
-      medium: medium
+      tiny:   tiny
     train_feeder_args.data_fraction:
       25pct: 0.25
       50pct: 0.50
