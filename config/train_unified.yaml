@@ -1,0 +1,60 @@
+Experiment_name: unified_ShiftGCN_hand_joint
+base_lr: 1.0e-3
+batch_size: 128
+config: config/train_unified.yaml
+device:
+- 0
+eval_interval: 5
+feeder: feeders.unified_feeder.UnifiedFeeder
+log_interval: 100
+model: model.shift_gcn.Model
+model_args:
+  graph: graph.hand_oakink.Graph
+  graph_args:
+    labeling_mode: spatial
+  in_channels: 3
+  num_class: 23
+  num_person: 1
+  num_point: 42
+model_saved_name: ./save_models/unified_ShiftGCN_hand_joint
+num_epoch: 100
+num_worker: 12
+phase: train
+print_log: true
+save_score: false
+show_topk:
+- 1
+- 5
+start_epoch: 0
+test_batch_size: 128
+
+test_feeder_args:
+  data_path: ./data/unified/val_data_joint.npy
+  label_path: ./data/unified/val_label.pkl
+  debug: false
+  normalization: false
+  random_choose: true
+  random_move: false
+  random_shift: false
+  window_size: 8
+
+train_feeder_args:
+  data_path: ./data/unified/train_data_joint.npy
+  label_path: ./data/unified/train_label.pkl
+  debug: false
+  normalization: false
+  random_choose: true
+  random_move: true
+  random_shift: true
+  window_size: 8
+
+warm_up_epoch: 5
+t_max_mult: 1
+weight_decay: 0.001
+label_smoothing: 0.1
+mask_ratio: 0
+mask_depth: 4
+recon_weight: 10
+freeze_temporal: false
+work_dir: ./work_dir/unified_ShiftGCN_hand_joint
+weights: null

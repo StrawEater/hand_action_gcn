@@ -1,0 +1,15 @@
+base: config/train_unified.yaml
+
+Experiment_name: unified_skeleton_mamba
+num_epoch: 35
+eval_interval: 5
+weights: null
+
+model: model.skeleton_mamba.SkeletonMambaModel
+model_args:
+  num_class: 23
+  num_point: 42
+  num_person: 1
+  in_channels: 3
+  model_size: tiny
+  num_frames: 8   # must match train_feeder_args.window_size

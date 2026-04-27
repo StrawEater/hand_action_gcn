@@ -492,11 +492,13 @@ class Processor():
                 start = time.time()
                 
                 if mask_ratio > 0:
+
                     original_data = data.clone()
                     data_masked, joint_mask = apply_joint_zero_mask(data, mask_ratio, mask_depth)
-
-                    output, recon = self.model(data_masked, return_recon=True)
-
+                    
+                    output = self.model(data, return_recon=False)
+                    _, recon = self.model(data_masked, return_recon=True)
+                    
                     if recon is None:
                         raise RuntimeError(
                             f"mask_ratio > 0 but {type(self.model).__name__} returned "
