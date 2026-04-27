@@ -15,7 +15,6 @@ sweep:
       full:  1.0
     mask_ratio:
       25-masked:   0.25
-      50-masked:   0.50
     transformations:
       transforms_on:
         train_feeder_args.random_move: true  
