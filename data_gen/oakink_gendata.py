@@ -31,7 +31,7 @@ from collections import Counter, defaultdict
 import numpy as np
 
 
-OAKINK_ROOT = "/workspace/OakInkV2_jpeg"
+OAKINK_ROOT = "/home/juanb/mnt/nikola_data/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/"
 KEYPOINT_DIR = os.path.join(OAKINK_ROOT, "hand_keypoints")
 LABEL_MAP_PATH = os.path.join(OAKINK_ROOT, "label_map.json")
 SPLIT_DIR = os.path.join(OAKINK_ROOT, "label_split")

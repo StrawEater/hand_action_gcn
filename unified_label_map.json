@@ -1,0 +1,294 @@
+{
+  "meta": {
+    "num_classes": 23,
+    "datasets": [
+      "OakInkV2",
+      "H2O"
+    ]
+  },
+  "unified_labels": {
+    "0": {
+      "name": "pour",
+      "type": "Cross",
+      "description": "Pouring a liquid from one container to another"
+    },
+    "1": {
+      "name": "unscrew",
+      "type": "Cross",
+      "description": "Rotating a cap/lid counter-clockwise to open"
+    },
+    "2": {
+      "name": "screw",
+      "type": "Cross",
+      "description": "Rotating a cap/lid clockwise to close"
+    },
+    "3": {
+      "name": "remove_lid",
+      "type": "Cross",
+      "description": "Removing a lid, flip-cap, or bag seal without rotation"
+    },
+    "4": {
+      "name": "put_on_lid",
+      "type": "Cross",
+      "description": "Placing or snapping a lid/cap back onto a container"
+    },
+    "5": {
+      "name": "take_outside",
+      "type": "OakInk",
+      "description": "Taking an object out of a container or enclosure"
+    },
+    "6": {
+      "name": "grip",
+      "type": "OakInk",
+      "description": "Grasping with a tool such as pliers or tongs"
+    },
+    "7": {
+      "name": "cut",
+      "type": "OakInk",
+      "description": "Cutting or slicing material with a blade"
+    },
+    "8": {
+      "name": "stir",
+      "type": "OakInk",
+      "description": "Stirring or mixing a substance with a tool"
+    },
+    "9": {
+      "name": "scoop",
+      "type": "OakInk",
+      "description": "Scooping material with a spoon or spatula"
+    },
+    "10": {
+      "name": "scrape",
+      "type": "OakInk",
+      "description": "Scraping material off a surface with a tool"
+    },
+    "11": {
+      "name": "place_inside",
+      "type": "OakInk",
+      "description": "Placing an object inside a broad container (bowl, box…)"
+    },
+    "12": {
+      "name": "insert_usb",
+      "type": "OakInk",
+      "description": "Inserting a USB drive into a port"
+    },
+    "13": {
+      "name": "remove_usb",
+      "type": "OakInk",
+      "description": "Removing a USB drive from a port"
+    },
+    "14": {
+      "name": "brush_whiteboard",
+      "type": "OakInk",
+      "description": "Brushing or wiping a whiteboard surface"
+    },
+    "15": {
+      "name": "open_gate",
+      "type": "OakInk",
+      "description": "Opening a hinged gate or door by pushing/pulling"
+    },
+    "16": {
+      "name": "close_gate",
+      "type": "OakInk",
+      "description": "Closing a hinged gate or door by pushing/pulling"
+    },
+    "17": {
+      "name": "take_out",
+      "type": "H2O",
+      "description": "Removing a capsule or item from a machine slot"
+    },
+    "18": {
+      "name": "grab",
+      "type": "H2O",
+      "description": "Bare-hand grasping of an everyday object"
+    },
+    "19": {
+      "name": "place",
+      "type": "H2O",
+      "description": "Setting an object down onto a surface"
+    },
+    "20": {
+      "name": "put_in",
+      "type": "H2O",
+      "description": "Inserting a capsule into an espresso machine slot"
+    },
+    "21": {
+      "name": "apply",
+      "type": "H2O",
+      "description": "Applying or rubbing a substance onto a surface"
+    },
+    "22": {
+      "name": "read",
+      "type": "H2O",
+      "description": "Reading text or a label on an object"
+    }
+  },
+  "oakink2_to_unified": {
+    "7": 11,
+    "10": 5,
+    "22": 0,
+    "24": 6,
+    "26": 0,
+    "28": 0,
+    "29": 2,
+    "30": 1,
+    "35": 11,
+    "37": 0,
+    "39": 5,
+    "41": 11,
+    "44": 4,
+    "46": 3,
+    "47": 5,
+    "50": 11,
+    "58": 11,
+    "59": 5,
+    "61": 11,
+    "65": 5,
+    "66": 11,
+    "69": 5,
+    "71": 11,
+    "73": 8,
+    "74": 5,
+    "75": 6,
+    "77": 0,
+    "79": 9,
+    "80": 11,
+    "82": 5,
+    "91": 0,
+    "94": 2,
+    "95": 1,
+    "97": 11,
+    "98": 0,
+    "100": 5,
+    "102": 0,
+    "103": 2,
+    "104": 1,
+    "121": 0,
+    "122": 2,
+    "123": 1,
+    "124": 0,
+    "125": 2,
+    "126": 1,
+    "129": 2,
+    "130": 1,
+    "135": 5,
+    "136": 0,
+    "138": 16,
+    "140": 15,
+    "143": 11,
+    "145": 5,
+    "147": 7,
+    "150": 5,
+    "151": 11,
+    "152": 0,
+    "155": 11,
+    "158": 11,
+    "160": 5,
+    "168": 11,
+    "172": 5,
+    "176": 11,
+    "180": 5,
+    "182": 11,
+    "185": 5,
+    "187": 0,
+    "197": 0,
+    "199": 2,
+    "200": 1,
+    "203": 8,
+    "204": 6,
+    "208": 11,
+    "211": 5,
+    "216": 11,
+    "218": 9,
+    "219": 10,
+    "221": 8,
+    "222": 5,
+    "223": 11,
+    "226": 5,
+    "227": 0,
+    "228": 11,
+    "229": 5,
+    "245": 6,
+    "247": 11,
+    "261": 12,
+    "262": 11,
+    "264": 13,
+    "265": 5,
+    "267": 12,
+    "268": 11,
+    "269": 13,
+    "270": 5,
+    "272": 7,
+    "273": 7,
+    "274": 11,
+    "278": 11,
+    "280": 5,
+    "282": 14,
+    "283": 11,
+    "285": 5,
+    "288": 11,
+    "291": 5,
+    "294": 0,
+    "296": 0,
+    "298": 11,
+    "299": 0,
+    "301": 2,
+    "302": 5,
+    "303": 1
+  },
+  "oakink_gcn_to_unified": {
+    "1": 14,
+    "2": 16,
+    "3": 7,
+    "4": 6,
+    "8": 12,
+    "9": 15,
+    "11": 11,
+    "13": 0,
+    "19": 4,
+    "22": 3,
+    "23": 13,
+    "24": 9,
+    "25": 10,
+    "26": 2,
+    "28": 8,
+    "30": 5,
+    "31": 1
+  },
+  "h2o_to_unified": {
+    "23": 0,
+    "18": 1,
+    "21": 2,
+    "17": 3,
+    "19": 3,
+    "20": 4,
+    "22": 4,
+    "24": 17,
+    "25": 17,
+    "26": 17,
+    "27": 17,
+    "1": 18,
+    "2": 18,
+    "3": 18,
+    "4": 18,
+    "5": 18,
+    "6": 18,
+    "7": 18,
+    "8": 18,
+    "9": 19,
+    "10": 19,
+    "11": 19,
+    "12": 19,
+    "13": 19,
+    "14": 19,
+    "15": 19,
+    "16": 19,
+    "28": 20,
+    "29": 20,
+    "30": 20,
+    "31": 21,
+    "32": 21,
+    "33": 22,
+    "34": 22
+  }
+}
