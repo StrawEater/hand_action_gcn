@@ -8,17 +8,17 @@ sweep:
   base: config/sweeps/base_skeleton_mamba_unified.yaml
   grid:
     model_args.model_size:
-      tiny:   tiny
+      medium: medium
     train_feeder_args.data_fraction:
-      25pct: 0.25
-      50pct: 0.50
       full:  1.0
     mask_ratio:
-      25-masked:   0.25
+      50-masked:   0.50
     transformations:
       transforms_on:
         train_feeder_args.random_move: true  
         train_feeder_args.random_shift: true
-      transforms_off:
-        train_feeder_args.random_move: false  
-        train_feeder_args.random_shift: false
+    model_args.embed_dim:
+      d-192: 192
+      d-384: 384
+      d-576: 576
+    

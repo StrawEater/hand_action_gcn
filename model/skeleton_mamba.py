@@ -200,6 +200,7 @@ class SkeletonMambaModel(nn.Module):
         model_size='tiny',
         num_frames=32,
         drop_path_rate=0.1,
+        embed_dim = 192,
         # unused but accepted for API compatibility with Shift-GCN config style
         graph=None,
         graph_args=None,
@@ -213,7 +214,7 @@ class SkeletonMambaModel(nn.Module):
         self._T = num_frames
         self._V = num_point
         self._C = in_channels
-        embed_dim = cfg['embed_dim']
+        # embed_dim = cfg['embed_dim']
 
         self.backbone = SkeletonMamba(
             num_joints=num_point,
