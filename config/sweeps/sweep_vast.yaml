@@ -9,7 +9,6 @@ sweep:
   grid:
     model_args.model_size:
       tiny:   tiny
-      medium: medium
     train_feeder_args.data_fraction:
       25pct: 0.25
       50pct: 0.50

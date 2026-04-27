@@ -102,8 +102,8 @@ def main():
                         help="Root of the unified dataset (output of build_unified_dataset.py)")
     parser.add_argument("--out-dir",     default="./data/unified",
                         help="Output directory for .npy and .pkl files")
-    parser.add_argument("--frames",  type=int, default=32, help="Clip length T (>= 9)")
-    parser.add_argument("--stride",  type=int, default=16, help="Sliding-window stride")
+    parser.add_argument("--frames",  type=int, default=16, help="Clip length T (>= 9)")
+    parser.add_argument("--stride",  type=int, default=8, help="Sliding-window stride")
     args = parser.parse_args()
 
     assert args.frames >= 9, "T must be >= 9 (temporal kernel size)"

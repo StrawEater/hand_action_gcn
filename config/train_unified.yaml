@@ -31,6 +31,7 @@ test_batch_size: 128
 test_feeder_args:
   data_path: ./data/unified/val_data_joint.npy
   label_path: ./data/unified/val_label.pkl
+  wrist_path: ./data/unified/val_wrist.npy
   debug: false
   normalization: false
   random_choose: true
@@ -41,6 +42,7 @@ test_feeder_args:
 train_feeder_args:
   data_path: ./data/unified/train_data_joint.npy
   label_path: ./data/unified/train_label.pkl
+  wrist_path: ./data/unified/train_wrist.npy
   debug: false
   normalization: false
   random_choose: true
